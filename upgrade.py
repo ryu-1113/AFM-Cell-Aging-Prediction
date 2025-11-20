@@ -128,9 +128,9 @@ class LatentRegressor(nn.Module):
 def tune_and_train_best_vae(X_all: torch.Tensor, input_dim: int, latent_dim: int) -> VAE:
     print("\n--- Phase 1: Hyperparameter Tuning & Training VAE ---")
     param_grid = {
-        'batch_size': [16, 32],
-        'lr': [1e-3, 5e-4,1e-4],
-        'dropout': [0.1, 0.2,0.3],
+        'batch_size': [8,16,24,32],
+        'lr': [5e-3,1e-3, 5e-4,1e-4],
+        'dropout': [0.1,0.15, 0.2,0.25,0.3],
         'epochs': [500,600,700,800,900,1000]
     }
     
