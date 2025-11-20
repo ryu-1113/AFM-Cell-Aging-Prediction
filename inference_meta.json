@@ -1,0 +1,25 @@
+{
+    "feature_cols": [
+        "height_mean",
+        "height_std",
+        "height_median",
+        "roughness_mean",
+        "roughness_std",
+        "roughness_median",
+        "length_mean",
+        "length_std",
+        "length_median",
+        "wideth_mean",
+        "wideth_std",
+        "wideth_median",
+        "adhesion_mean",
+        "adhesion_std",
+        "adhesion_median",
+        "elastic_modulus_mean",
+        "elastic_modulus_std",
+        "elastic_modulus_median"
+    ],
+    "latent_dim": 2,
+    "flip_factor": -1.0,
+    "input_dim": 18
+}

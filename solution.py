@@ -357,18 +357,18 @@ def align_aging_axis(df_latent: pd.DataFrame, latent_col: str = 'z0', aging_scor
     # 秩相关更适合潜在空间，因为它不假设线性关系，更侧重于排序关系。
     correlation, p_value = spearmanr(df_latent[latent_col], df_latent[aging_score_col])
     
-    print(f"原始 {latent_col} 与衰老分数的 Spearman 相关系数: {correlation:.4f}")
+    print(f"orginal {latent_col} and aging-score  spearman: {correlation:.4f}")
 
     # 2. 检查相关系数，并进行轴校准
     if correlation < 0:
         # 如果相关系数为负，表示 z0 轴与衰老方向相反（年轻 -> 衰老 对应 z0 负向 -> z0 正向）
         # 需要翻转 z0 轴。
         df_latent['z0'] = -df_latent[latent_col]
-        print(f"轴反转：相关系数为负，{latent_col} 已翻转。")
+        print(f"axis flipping: minus spearman {latent_col} was flipped。")
     else:
         # 如果相关系数为正，方向正确（年轻 -> 衰老 对应 z0 负向 -> z0 正向）
         df_latent['z0'] = df_latent[latent_col]
-        print(f"轴方向正确：相关系数为正，{latent_col} 未翻转。")
+        print(f"no axix flipping, using original {latent_col} .")
         
     return df_latent 
 
