@@ -337,7 +337,7 @@ def plot_and_validate(df_results: pd.DataFrame):
             plt.text(i, text_y_pos, f'Mean: {score:.2f}', 
                      horizontalalignment='center', color='black', fontsize=10)
 
-    output_plot_name = 'validation_boxplot_hypoxia.pdf'
+    output_plot_name = 'validation_boxplot_hypoxia.pdf  '
     plt.savefig(output_plot_name, dpi=300)
     print(f"\nINFO: Visualization saved to: {output_plot_name}")
     plt.close()
