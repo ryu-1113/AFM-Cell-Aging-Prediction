@@ -184,7 +184,7 @@ def plot_latent_space_probability_pdf(df_latent: pd.DataFrame, z0_col: str = 'z0
                      cmap='coolwarm', s=50, alpha=0.8)
     cbar = plt.colorbar(sc)
     cbar.set_label("Predicted Senescence Probability", rotation=270, labelpad=15, fontsize=12)
-    plt.title('VAE Latent Space (Calibrated) - Colored by Probability', fontsize=16)
+    plt.title('VAE Latent Space - Colored by Probability', fontsize=16)
     plt.xlabel(f'Latent Dimension 1 ({z0_col}) [Low->High Aging]', fontsize=12)
     plt.ylabel('Latent Dimension 2 (z1)', fontsize=12)
     plt.grid(True, linestyle='--', alpha=0.5)

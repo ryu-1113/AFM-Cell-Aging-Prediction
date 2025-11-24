@@ -9,6 +9,7 @@ import joblib
 import sys
 import os
 import torch.nn as nn
+from typing import Tuple, List, Dict
 
 # =================================================================
 # 1. Configuration and Constants
@@ -38,6 +39,8 @@ for stat in ['mean', 'median', 'std']:
 
 # 设置绘图风格
 sns.set_style("whitegrid")
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+print(f"Using device: {device}")
 
 # =================================================================
 # 2. Model Architecture Definitions (Match upgrade.py)
@@ -90,24 +93,17 @@ class Regressor(nn.Module):
 def transform_raw_data_to_model_input(df_raw: pd.DataFrame, feature_names: list) -> pd.DataFrame:
     """
     Groups by cell_id, Condition, and cycle to calculate statistics 
-    for each unique cell/condition group. This function is based on the 
-    corrected grouping from our previous iterations to ensure all conditions
-    are preserved.
+    for each unique cell/condition group.
     """
     df_temp = df_raw.copy()
     
     print(f"DEBUG: Inside transform_raw_data_to_model_input - initial df_temp shape: {df_temp.shape}")
-    print(f"DEBUG: Unique 'Condition' values in df_temp before ffill/dropna: {df_temp['Condition'].unique().tolist()}")
-    print(f"DEBUG: Count of 'cell_id' NaNs before ffill: {df_temp['cell_id'].isnull().sum()}")
 
     # 1. Forward-fill missing cell_id values.
     if df_temp['cell_id'].isnull().any():
         df_temp['cell_id'] = df_temp['cell_id'].ffill()
         print("INFO: Missing 'cell_id' values have been forward-filled (ffill).")
     
-    print(f"DEBUG: Count of 'cell_id' NaNs after ffill: {df_temp['cell_id'].isnull().sum()}")
-    print(f"DEBUG: Count of 'Condition' NaNs after ffill: {df_temp['Condition'].isnull().sum()}")
-
     # Define the CORRECT grouping keys (cell_id, Condition, cycle)
     GROUPING_KEYS = ['cell_id', 'Condition', 'cycle']
     
@@ -115,7 +111,6 @@ def transform_raw_data_to_model_input(df_raw: pd.DataFrame, feature_names: list)
     df_temp.dropna(subset=GROUPING_KEYS + feature_names, inplace=True) 
     
     print(f"DEBUG: df_temp shape after dropping NaNs in grouping keys/features: {df_temp.shape}")
-    print(f"DEBUG: Unique 'Condition' values in df_temp after cleaning: {df_temp['Condition'].unique().tolist()}")
 
     if df_temp.empty:
         raise ValueError("ERROR: Dataframe is empty after cleaning essential columns.")
@@ -140,16 +135,15 @@ def transform_raw_data_to_model_input(df_raw: pd.DataFrame, feature_names: list)
     df_vae_input = df_vae_input[GROUPING_KEYS + MODEL_INPUT_FEATURES]
 
     print(f"DEBUG: Final df_vae_input shape: {df_vae_input.shape}")
-    print(f"DEBUG: Unique 'Condition' values in final df_vae_input: {df_vae_input['Condition'].unique().tolist()}")
     
     return df_vae_input
 
 # =================================================================
-# 4. Model and Scaler Loading Function
+# 4. Model and Scaler Loading Function (REMOVED flip_factor)
 # =================================================================
 
 def load_models_and_metadata(meta_path: str, vae_path: str, reg_path: str, scaler_path: str):
-    """Loads metadata, models, and the StandardScaler object."""
+    """Loads metadata, models, and the StandardScaler object. Removed flip_factor."""
     print("INFO: Loading metadata, models, and scaler...")
     
     try:
@@ -161,7 +155,7 @@ def load_models_and_metadata(meta_path: str, vae_path: str, reg_path: str, scale
 
     input_dim = meta.get('input_dim', 18)
     latent_dim = meta.get('latent_dim', 2)
-    flip_factor = meta.get('flip_factor', 1)
+    # flip_factor = meta.get('flip_factor', 1)  <-- 移除 flip_factor 加载
     
     scaler = None
     try:
@@ -184,17 +178,18 @@ def load_models_and_metadata(meta_path: str, vae_path: str, reg_path: str, scale
     vae.eval()
     regressor.eval()
     
-    return vae, regressor, flip_factor, scaler
+    # 返回值中移除 flip_factor
+    return vae, regressor, scaler 
 
 # =================================================================
-# 5. Main Inference Function (Original Logic Restored)
+# 5. Main Inference Function (MODIFIED AXIS MAPPING)
 # =================================================================
 
 def run_inference():
     """Executes the full inference pipeline."""
     
-    # 1. Load resources
-    vae, regressor, flip_factor, scaler = load_models_and_metadata(
+    # 1. Load resources (调用时移除 flip_factor)
+    vae, regressor, scaler = load_models_and_metadata(
         META_FILE_PATH, VAE_MODEL_PATH, REGRESSOR_MODEL_PATH, SCALER_PATH
     )
     
@@ -211,7 +206,7 @@ def run_inference():
         
     print(f"INFO: Raw data loaded. Total rows: {len(df_raw)}")
     
-    # Simplify group column renaming based on known input
+    # Simplification of group column renaming based on known input
     if 'condition' in df_raw.columns:
         df_raw.rename(columns={'condition': 'Condition'}, inplace=True)
         print("INFO: Renamed 'condition' to 'Condition'.")
@@ -219,7 +214,7 @@ def run_inference():
         print(f"FATAL ERROR: Required group column 'Condition' (or 'condition') not found in data. Available: {df_raw.columns.tolist()}")
         sys.exit(1)
 
-    # Simplify cycle column renaming (if '周期' exists)
+    # Simplification of cycle column renaming
     if '周期' in df_raw.columns and 'cycle' not in df_raw.columns:
         df_raw.rename(columns={'周期': 'cycle'}, inplace=True)
         print("INFO: Renamed '周期' to 'cycle'.")
@@ -244,7 +239,7 @@ def run_inference():
     else:
         print("WARNING: Raw feature standardization skipped.")
 
-    # 4. Model Inference & Latent Space Standardization (ORIGINAL CRITICAL LOGIC)
+    # 4. Model Inference & Latent Space Standardization
     print("\n--- 4. Model Inference ---")
     X_tensor = torch.tensor(X_new, dtype=torch.float32)
     with torch.no_grad():
@@ -253,13 +248,7 @@ def run_inference():
     z_mu_new_np = z_mu_new.cpu().numpy()
     
     # --- ORIGINAL KEY FIX: Standardize the Latent Space for Regressor ---
-    # This block ensures that z_mu is scaled before being passed to the Regressor,
-    # which was crucial for its correct performance.
-    z_scaler = StandardScaler() # Re-fit the z_scaler for the new data.
-                                # For true generalization, this scaler should be saved 
-                                # and loaded from upgrade.py. But for fixing the immediate 
-                                # prediction issue based on previous console output,
-                                # dynamic fit_transform is the direct restoration.
+    z_scaler = StandardScaler() 
     z_mu_new_scaled_np = z_scaler.fit_transform(z_mu_new_np)
     
     z_mu_new_scaled = torch.tensor(z_mu_new_scaled_np, dtype=torch.float32)
@@ -277,11 +266,12 @@ def run_inference():
     df_results = df_vae_input.copy()
     df_results['predicted_prob'] = predicted_prob_np
     
-    # Store latent space (aligned) for plotting, using the original (non-scaled) z_mu for these values,
-    # as the latent space visualization itself typically refers to the VAE's direct output,
-    # with `flip_factor` for interpretability on the aging axis.
-    df_results['z0_aligned'] = z_mu_new_np[:, 0] * flip_factor 
-    df_results['z1'] = z_mu_new_np[:, 1] # Keep z1 as is from VAE output
+    # --- MODIFIED AXIS MAPPING LOGIC ---
+    # z_mu_new_np[:, 0] 是原 z0， z_mu_new_np[:, 1] 是原 z1
+    # 新 z0 = -原 z1 (作为衰老轴)
+    df_results['z0'] = -z_mu_new_np[:, 1] 
+    # 新 z1 = 原 z0 
+    df_results['z1'] = z_mu_new_np[:, 0] 
 
     # 6. Validation and Plotting
     plot_and_validate(df_results)
@@ -289,7 +279,7 @@ def run_inference():
 
 
 # =================================================================
-# 6. Visualization and Validation Function (ENHANCED & SAVE PDF)
+# 6. Visualization and Validation Function (MODIFIED LABELS)
 # =================================================================
 
 def plot_and_validate(df_results: pd.DataFrame):
@@ -325,9 +315,9 @@ def plot_and_validate(df_results: pd.DataFrame):
 
     palette_map = {'Normoxia': 'r', 'Hypoxia': 'b'}
     # 定义形状映射
-    marker_map = {'Normoxia': 'o', 'Hypoxia': 'X'} # 圆形 vs 叉号
+    marker_map = {'Normoxia': 'o', 'Hypoxia': 'X'} 
 
-    # --- Plot 1: Boxplot (Existing) ---
+    # --- Plot 1: Boxplot ---
     plt.figure(figsize=(6, 5))
     sns.boxplot(
         x='Condition', 
@@ -344,45 +334,44 @@ def plot_and_validate(df_results: pd.DataFrame):
     for i, condition in enumerate(plot_order):
         score = mean_scores.get(condition, np.nan)
         if not np.isnan(score):
-            text_y_pos = 1.02
-            plt.text(i, text_y_pos, f'Mean: {score:.2f}', 
+            text_y_pos = 1.03 # 调整位置，保持与训练图统一
+            plt.text(i, text_y_pos, f'Mean: {score:.3f}', # 保留 3 位小数
                      horizontalalignment='center', color='black', fontsize=10)
 
-    # 保存为 PDF，并确保文件名无空格
+    # 保存为 PDF
     output_plot_name = 'validation_1_boxplot.pdf'.strip()
     plt.savefig(output_plot_name, format='pdf', bbox_inches='tight')
     print(f"INFO: Visualization saved: {output_plot_name}")
     plt.close()
 
-    # --- Plot 2: Violin Plot (New) ---
+    # --- Plot 2: Violin Plot ---
     plt.figure(figsize=(6, 5))
     sns.violinplot(
         x='Condition',
         y='predicted_prob',
         data=df_results,
         order=plot_order,
-        bw_adjust=BW_ADJUST_FACTOR, # <--- 减小带宽      
+        bw_adjust=BW_ADJUST_FACTOR,       
         palette={k: palette_map[k] for k in plot_order},
-        inner='box' # 在小提琴内部绘制箱线图
+        inner='box' 
     )
     plt.title('Predicted Senescence Probability by Oxygen Condition (Violin Plot)')
     plt.xlabel('Condition')
     plt.ylabel('Senescence Probability')
     plt.ylim(-0.05, 1.05)
     
-    # 保存为 PDF，并确保文件名无空格
+    # 保存为 PDF
     output_plot_name = 'validation_2_violinplot.pdf'.strip()
     plt.savefig(output_plot_name, format='pdf', bbox_inches='tight')
     print(f"INFO: Visualization saved: {output_plot_name}")
     plt.close()
 
-    # --- Plot 3: Density Plot (New) ---
+    # --- Plot 3: Density Plot ---
     plt.figure(figsize=(7, 5))
     for cond in plot_order:
         subset = df_results[df_results['Condition'] == cond]
-        # 只有当数据量足够时才绘制密度图，否则会报错
         if len(subset) > 1:
-            sns.kdeplot(subset['predicted_prob'], label=cond, color=palette_map[cond], bw_adjust=BW_ADJUST_FACTOR # <--- 减小带宽
+            sns.kdeplot(subset['predicted_prob'], label=cond, color=palette_map[cond], bw_adjust=BW_ADJUST_FACTOR 
                         ,fill=True, alpha=0.4)
     
     plt.title('Predicted Senescence Probability Density')
@@ -391,54 +380,50 @@ def plot_and_validate(df_results: pd.DataFrame):
     plt.xlim(-0.05, 1.05)
     plt.legend(title='Condition')
     
-    # 保存为 PDF，并确保文件名无空格
+    # 保存为 PDF
     output_plot_name = 'validation_3_densityplot.pdf'.strip()
     plt.savefig(output_plot_name, format='pdf', bbox_inches='tight')
     print(f"INFO: Visualization saved: {output_plot_name}")
     plt.close()
 
-    # --- Plot 4: Latent Space Projection (Revised Colorbar Logic) ---
-    fig, ax = plt.subplots(figsize=(8, 6)) # 创建 Figure 和 Axes 对象
+    # --- Plot 4: Latent Space Projection (MODIFIED AXES) ---
+    fig, ax = plt.subplots(figsize=(8, 6)) 
     
-    # 存储 scatter plot 的返回值，以便为 colorbar 提供 mappable
     scatter_plot_mappable = None
     
     for cond in plot_order:
         subset = df_results[df_results['Condition'] == cond]
-        # 在 `ax` 上绘制散点图
         current_scatter = ax.scatter(
-            x=subset['z0_aligned'],
+            x=subset['z0'], # <-- 使用新的 'z0' (原-z1)
             y=subset['z1'],
             c=subset['predicted_prob'],
             cmap='coolwarm',
-            marker=marker_map[cond], # 使用对应的形状
+            marker=marker_map[cond], 
             s=100,
             alpha=0.8,
             edgecolors='k',
             linewidth=0.5,
             label=cond,
-            vmin=0, vmax=1 # 确保颜色映射范围一致
+            vmin=0, vmax=1 
         )
-        # 只要绘制一次，就保存这个 mappable
         if scatter_plot_mappable is None:
             scatter_plot_mappable = current_scatter
         
-    # 为 `scatter_plot_mappable` (实际的散点图对象) 添加 colorbar，并指定到 `ax`
     if scatter_plot_mappable:
         cbar = fig.colorbar(scatter_plot_mappable, ax=ax)
         cbar.set_label("Predicted Senescence Probability", rotation=270, labelpad=15)
     
-    ax.set_title('New Data in VAE Latent Space\n(Shape=Condition, Color=Prediction)', fontsize=14)
-    ax.set_xlabel('Latent Dimension 1 (z0_aligned) [Aging Axis]')
+    ax.set_title('New Data in VAE Latent Space(Shape=Condition, Color=Prediction)', fontsize=14)
+    ax.set_xlabel('Latent Dimension 1 (z0) [Aging Axis]') # <-- 移除 z0_aligned
     ax.set_ylabel('Latent Dimension 2 (z1)')
     ax.grid(True, linestyle='--', alpha=0.5)
     ax.legend(title='Condition')
     
-    # 保存为 PDF，并确保文件名无空格
+    # 保存为 PDF
     output_plot_name = 'validation_4_latent_space.pdf'.strip()
-    fig.savefig(output_plot_name, format='pdf', bbox_inches='tight') # 使用 fig.savefig
+    fig.savefig(output_plot_name, format='pdf', bbox_inches='tight') 
     print(f"INFO: Visualization saved: {output_plot_name}")
-    plt.close(fig) # 关闭当前的 Figure
+    plt.close(fig) 
 
 # =================================================================
 # 7. Main Execution Block
