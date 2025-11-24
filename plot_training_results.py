@@ -194,17 +194,47 @@ def plot_latent_space_probability_pdf(df_latent: pd.DataFrame, z0_col: str = 'z0
     plt.close()
 
 def plot_prediction_boxplot_pdf(df_results: pd.DataFrame):
-    """(4) 预测结果的箱线图"""
-    print("Generating Prediction Boxplot (PDF)...")
-    plt.figure(figsize=(10, 5))
+    """
+    (4) 预测结果的箱线图 - 样式优化版
+    仿照 evaluation.py 的风格，在图表顶部显示每个周期的均值。
+    """
+    print("Generating Prediction Boxplot with Top Mean Labels (PDF)...")
+    plt.figure(figsize=(10, 6))
+    
     # 定义周期顺序
     cycle_order = ['P4', 'P6', 'P8', 'P10']
+    
+    # 1. 绘制箱线图
+    # 使用 Set2 色板，保持与之前训练图表一致的美观度
     sns.boxplot(data=df_results, x='cycle', y='prob_sol_4B', order=cycle_order, palette="Set2")
+    
+    # 2. 计算均值
+    means = df_results.groupby('cycle')['prob_sol_4B'].mean()
+    
+    # 3. 在顶部标注均值 (模仿 Validation 风格)
+    # y_pos 固定在 1.02 或 1.03，确保文字整齐排列在绘图区顶部
+    text_y_pos = 1.03 
+    
+    for i, cycle in enumerate(cycle_order):
+        mean_val = means.get(cycle, float('nan'))
+        if not np.isnan(mean_val):
+            plt.text(x=i, 
+                     y=text_y_pos, 
+                     s=f'Mean: {mean_val:.3f}',  # 保留3位小数，精度更高
+                     horizontalalignment='center', 
+                     color='black', 
+                     fontsize=11,
+                     fontweight='medium')
+
     plt.title('VAE + Regressor (Optimized) - Probability Distribution (Boxplot)', fontsize=14)
-    plt.ylim(-0.05, 1.05)
+    
+    # 扩展 Y 轴范围，为顶部的文字留出空间
+    plt.ylim(-0.05, 1.15) 
     plt.ylabel('Predicted Senescence Probability')
+    plt.xlabel('Cycle')
+    
     output_file = 'training_plot_4_prediction_boxplot.pdf'
-    plt.savefig(output_file, format='pdf')
+    plt.savefig(output_file, format='pdf', bbox_inches='tight')
     print(f"Saved: {output_file}")
     plt.close()
 
@@ -227,6 +257,33 @@ def plot_prediction_kde_pdf(df_results: pd.DataFrame):
     print(f"Saved: {output_file}")
     plt.close()
 
+
+def print_boxplot_statistics(df_results: pd.DataFrame):
+    """
+    计算并打印箱线图的关键统计数值：
+    Q1 (箱底), Median (箱中线), Q3 (箱顶), IQR, 以及预测值的均值。
+    """
+    print("\n" + "="*50)
+    print(">>> 箱线图具体数值统计 (Boxplot Statistics) <<<")
+    print("="*50)
+    
+    # 按周期分组计算统计量
+    # describe() 会自动计算 count, mean, std, min, 25%(Q1), 50%(Median), 75%(Q3), max
+    stats = df_results.groupby('cycle')['prob_sol_4B'].describe()
+    
+    # 按照 P4, P6, P8, P10 的顺序排列 (如果索引不是有序的)
+    cycle_order = ['P4', 'P6', 'P8', 'P10']
+    stats = stats.reindex(cycle_order)
+    
+    # 打印详细表格
+    print(stats[['count', 'min', '25%', '50%', '75%', 'max']].to_string())
+    
+    print("\n--- 详细解释 ---")
+    print("25% (Q1)   : 箱体的下边缘 (Lower Hinge)")
+    print("50% (Median): 箱体内部的横线 (中位数)")
+    print("75% (Q3)   : 箱体的上边缘 (Upper Hinge)")
+    print("min/max    : 数据的极值 (须线的末端通常基于这些值，但不完全等于min/max，取决于离群点)")
+    print("="*50 + "\n")
 
 # --- 主程序入口 ---
 if __name__ == '__main__':
@@ -275,5 +332,6 @@ if __name__ == '__main__':
     plot_prediction_boxplot_pdf(df_results)
     # (5) 密度图
     plot_prediction_kde_pdf(df_results)
+    print_boxplot_statistics(df_results)
 
     print("\nAll training results plotted and saved as PDF.")
