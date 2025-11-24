@@ -309,9 +309,10 @@ if __name__ == '__main__':
     # 3. 构建结果 DataFrame
     df_latent = pd.DataFrame(z_mu_all_np, columns=['z0', 'z1'])
     # 应用轴校准
-    df_latent['z0_aligned'] = df_latent['z0'] * flip_factor
+    df_latent['z0_aligned'] = df_latent['z1'] * flip_factor
     df_latent['prob_sol_4B'] = probs
     df_latent['cycle'] = df_raw['cycle']
+    df_latent['z1'] = df_latent['z0']
     
     # 为了方便绘图，将预测结果也合并回 raw dataframe
     df_results = df_raw.copy()
