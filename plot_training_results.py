@@ -131,7 +131,7 @@ def load_models_and_data() -> Tuple[pd.DataFrame, VAE, LatentRegressor, Standard
 
 # --- 绘图函数 (修改为保存 PDF) ---
 
-def plot_correlation_heatmap_pdf(df_latent: pd.DataFrame, df_raw: pd.DataFrame, feature_cols: list, z0_col: str = 'z0_aligned'):
+def plot_correlation_heatmap_pdf(df_latent: pd.DataFrame, df_raw: pd.DataFrame, feature_cols: list, z0_col: str = 'z0'):
     """(1) VAE特征向量与原始特征(中位数/平均值)的关系热力图"""
     print("Generating Correlation Heatmap (PDF)...")
     # 筛选出包含 'mean' 或 'median' 的特征
@@ -158,7 +158,7 @@ def plot_correlation_heatmap_pdf(df_latent: pd.DataFrame, df_raw: pd.DataFrame, 
     print(f"Saved: {output_file}")
     plt.close()
 
-def plot_latent_space_cycle_pdf(df_latent: pd.DataFrame, z0_col: str = 'z0_aligned'):
+def plot_latent_space_cycle_pdf(df_latent: pd.DataFrame, z0_col: str = 'z0'):
     """(2) VAE的潜在空间可视化（按细胞周期着色）"""
     print("Generating Latent Space by Cycle (PDF)...")
     plt.figure(figsize=(10, 7))
@@ -166,7 +166,7 @@ def plot_latent_space_cycle_pdf(df_latent: pd.DataFrame, z0_col: str = 'z0_align
     cycle_order = ['P4', 'P6', 'P8', 'P10']
     sns.scatterplot(data=df_latent, x=z0_col, y='z1', hue='cycle', 
                     hue_order=cycle_order, palette='viridis', s=50, alpha=0.8)
-    plt.title('VAE Latent Space (Calibrated) - Colored by Cycle', fontsize=16)
+    plt.title('VAE Latent Space - Colored by Cycle', fontsize=16)
     plt.xlabel(f'Latent Dimension 1 ({z0_col}) [Low->High Aging]', fontsize=12)
     plt.ylabel('Latent Dimension 2 (z1)', fontsize=12)
     plt.grid(True, linestyle='--', alpha=0.5)
@@ -176,7 +176,7 @@ def plot_latent_space_cycle_pdf(df_latent: pd.DataFrame, z0_col: str = 'z0_align
     print(f"Saved: {output_file}")
     plt.close()
 
-def plot_latent_space_probability_pdf(df_latent: pd.DataFrame, z0_col: str = 'z0_aligned'):
+def plot_latent_space_probability_pdf(df_latent: pd.DataFrame, z0_col: str = 'z0'):
     """(3) VAE的潜在空间（按预测着色）"""
     print("Generating Latent Space by Probability (PDF)...")
     plt.figure(figsize=(10, 7))
@@ -226,7 +226,7 @@ def plot_prediction_boxplot_pdf(df_results: pd.DataFrame):
                      fontsize=11,
                      fontweight='medium')
 
-    plt.title('VAE + Regressor (Optimized) - Probability Distribution (Boxplot)', fontsize=14)
+    plt.title('VAE + Regressor - Probability Distribution (Boxplot)', fontsize=14)
     
     # 扩展 Y 轴范围，为顶部的文字留出空间
     plt.ylim(-0.05, 1.15) 
@@ -247,7 +247,7 @@ def plot_prediction_kde_pdf(df_results: pd.DataFrame):
     for cycle in cycle_order:
         sns.kdeplot(df_results[df_results['cycle'] == cycle]['prob_sol_4B'], 
                     label=cycle, fill=True, alpha=0.4, linewidth=1.5)
-    plt.title('VAE + Regressor (Optimized) - Probability Density (KDE)', fontsize=14)
+    plt.title('VAE + Regressor - Probability Density (KDE)', fontsize=14)
     plt.xlim(-0.05, 1.05)
     plt.xlabel('Predicted Senescence Probability')
     plt.ylabel('Density')
@@ -306,22 +306,32 @@ if __name__ == '__main__':
     
     z_mu_all_np = mu_all.cpu().numpy()
 
-    # 3. 构建结果 DataFrame
-    df_latent = pd.DataFrame(z_mu_all_np, columns=['z0', 'z1'])
-    # 应用轴校准
-    df_latent['z0_aligned'] = df_latent['z1'] * flip_factor
+    # --- 步骤 3: 构建结果 DataFrame (新的轴映射逻辑) ---
+    df_latent = pd.DataFrame(z_mu_all_np, columns=['z_old', 'z_new']) # 临时命名
+
+# **删除或注释掉原有的轴反转/校准逻辑**
+# df_latent['z0_aligned'] = df_latent['z1'] * flip_factor  # <-- 删除/注释
+# df_latent['prob_sol_4B'] = probs
+# df_latent['cycle'] = df_raw['cycle']
+# df_latent['z1'] = df_latent['z0']                         # <-- 删除/注释
+
+# **应用新的轴映射和命名：**
+# 设定新的 z0 = -z_new (原 z1 的反方向，作为衰老轴)
+    df_latent['z0'] = -df_latent['z_new'] 
+# 设定新的 z1 = z_old (原 z0)
+    df_latent['z1'] = df_latent['z_old'] 
+    df_latent = df_latent.drop(columns=['z_old', 'z_new'])
+
     df_latent['prob_sol_4B'] = probs
     df_latent['cycle'] = df_raw['cycle']
-    df_latent['z1'] = df_latent['z0']
-    
-    # 为了方便绘图，将预测结果也合并回 raw dataframe
+
+# 为了方便绘图，将预测结果也合并回 raw dataframe
     df_results = df_raw.copy()
     df_results['prob_sol_4B'] = probs
-    df_results['z0_aligned'] = df_latent['z0_aligned']
+# df_results['z0_aligned'] = df_latent['z0_aligned'] # <-- 删除/注释
+# df_results['z1'] = df_latent['z1']                 # <-- 删除/注释
+    df_results['z0'] = df_latent['z0']
     df_results['z1'] = df_latent['z1']
-
-    print("Inference complete. Generating plots...")
-
     # 4. 生成并保存 PDF 图表
     # (1) 热力图
     plot_correlation_heatmap_pdf(df_latent, df_raw, feature_cols)
