@@ -87,63 +87,63 @@ class Regressor(nn.Module):
         return self.network(x)
 
 # =================================================================
-# 3. Data Transformation Function (Original, Corrected Grouping)
+# 3. Data Transformation Function (MODIFIED: No Aggregation)
 # =================================================================
 
 def transform_raw_data_to_model_input(df_raw: pd.DataFrame, feature_names: list) -> pd.DataFrame:
     """
-    Groups by cell_id, Condition, and cycle to calculate statistics 
-    for each unique cell/condition group.
+    Convert raw rows directly to model input format WITHOUT aggregation.
+    Each row in the CSV becomes one sample.
+    mean = raw_value, median = raw_value, std = 0.0
     """
     df_temp = df_raw.copy()
     
-    print(f"DEBUG: Inside transform_raw_data_to_model_input - initial df_temp shape: {df_temp.shape}")
+    print(f"DEBUG: Inside transform function - initial df_temp shape: {df_temp.shape}")
 
-    # 1. Forward-fill missing cell_id values.
-    if df_temp['cell_id'].isnull().any():
-        df_temp['cell_id'] = df_temp['cell_id'].ffill()
-        print("INFO: Missing 'cell_id' values have been forward-filled (ffill).")
-    
-    # Define the CORRECT grouping keys (cell_id, Condition, cycle)
-    GROUPING_KEYS = ['cell_id', 'Condition', 'cycle']
-    
-    # Drop NaNs from the essential grouping columns and features
-    df_temp.dropna(subset=GROUPING_KEYS + feature_names, inplace=True) 
-    
-    print(f"DEBUG: df_temp shape after dropping NaNs in grouping keys/features: {df_temp.shape}")
+    # 1. Fill metadata (Condition, cycle, cell_id) downwards
+    # This ensures every row has a label, even if the CSV merged cells visually
+    cols_to_fill = ['Condition', 'cycle', 'cell_id']
+    for col in cols_to_fill:
+        if col in df_temp.columns:
+            df_temp[col] = df_temp[col].ffill()
+            
+    print("INFO: Forward-filled metadata columns (Condition, cycle, cell_id) to ensure every row is used.")
 
-    if df_temp.empty:
-        raise ValueError("ERROR: Dataframe is empty after cleaning essential columns.")
-
-    df_temp['cell_id'] = df_temp['cell_id'].astype(int)
+    # 2. Drop rows where essential feature data is missing
+    df_temp.dropna(subset=feature_names, inplace=True)
     
-    # A. Aggregate Feature Columns (numeric stats) - Grouping by cell_id, Condition, and cycle
-    agg_funcs = {name: ['mean', 'median', 'std'] for name in feature_names}
-    df_vae_input = df_temp.groupby(GROUPING_KEYS).agg(agg_funcs).reset_index() 
+    # 3. Create the 18 model features directly from the 6 raw features
+    # Since we are treating each row as a sample, there is no "group".
+    # Mean = Value, Median = Value, Std = 0
     
-    # Correct column flattening after grouping by multiple keys
-    new_cols = GROUPING_KEYS + [f'{col[0]}_{col[1]}' for col in df_vae_input.columns[len(GROUPING_KEYS):]]
-    df_vae_input.columns = new_cols
-
-    # Fill NaN std (which happens when only one measurement is available) with 0
     for name in feature_names:
-        std_col = f'{name}_std'
-        if std_col in df_vae_input.columns and df_vae_input[std_col].isnull().any():
-             df_vae_input[std_col] = df_vae_input[std_col].fillna(0.0)
+        df_temp[f'{name}_mean'] = df_temp[name]
+        df_temp[f'{name}_median'] = df_temp[name]
+        df_temp[f'{name}_std'] = 0.0 # Single measurement has zero variance
     
-    # Final check and return
-    df_vae_input = df_vae_input[GROUPING_KEYS + MODEL_INPUT_FEATURES]
+    # Final check
+    # Ensure we have all required input columns
+    df_final = df_temp.copy()
+    
+    # Keep only relevant columns
+    keep_cols = ['Condition', 'cycle'] + MODEL_INPUT_FEATURES
+    # If cell_id exists, keep it for reference, though not used for grouping anymore
+    if 'cell_id' in df_final.columns:
+        keep_cols.insert(0, 'cell_id')
+        
+    df_final = df_final[keep_cols]
 
-    print(f"DEBUG: Final df_vae_input shape: {df_vae_input.shape}")
+    print(f"DEBUG: Final transformed shape (Rows x Features): {df_final.shape}")
+    print(f"INFO: Each of the {len(df_final)} rows will be predicted independently.")
     
-    return df_vae_input
+    return df_final
 
 # =================================================================
-# 4. Model and Scaler Loading Function (REMOVED flip_factor)
+# 4. Model and Scaler Loading Function
 # =================================================================
 
 def load_models_and_metadata(meta_path: str, vae_path: str, reg_path: str, scaler_path: str):
-    """Loads metadata, models, and the StandardScaler object. Removed flip_factor."""
+    """Loads metadata, models, and the StandardScaler object."""
     print("INFO: Loading metadata, models, and scaler...")
     
     try:
@@ -155,7 +155,6 @@ def load_models_and_metadata(meta_path: str, vae_path: str, reg_path: str, scale
 
     input_dim = meta.get('input_dim', 18)
     latent_dim = meta.get('latent_dim', 2)
-    # flip_factor = meta.get('flip_factor', 1)  <-- 移除 flip_factor 加载
     
     scaler = None
     try:
@@ -178,17 +177,16 @@ def load_models_and_metadata(meta_path: str, vae_path: str, reg_path: str, scale
     vae.eval()
     regressor.eval()
     
-    # 返回值中移除 flip_factor
     return vae, regressor, scaler 
 
 # =================================================================
-# 5. Main Inference Function (MODIFIED AXIS MAPPING)
+# 5. Main Inference Function
 # =================================================================
 
 def run_inference():
     """Executes the full inference pipeline."""
     
-    # 1. Load resources (调用时移除 flip_factor)
+    # 1. Load resources
     vae, regressor, scaler = load_models_and_metadata(
         META_FILE_PATH, VAE_MODEL_PATH, REGRESSOR_MODEL_PATH, SCALER_PATH
     )
@@ -206,7 +204,7 @@ def run_inference():
         
     print(f"INFO: Raw data loaded. Total rows: {len(df_raw)}")
     
-    # Simplification of group column renaming based on known input
+    # Simplify group column renaming based on known input
     if 'condition' in df_raw.columns:
         df_raw.rename(columns={'condition': 'Condition'}, inplace=True)
         print("INFO: Renamed 'condition' to 'Condition'.")
@@ -214,7 +212,7 @@ def run_inference():
         print(f"FATAL ERROR: Required group column 'Condition' (or 'condition') not found in data. Available: {df_raw.columns.tolist()}")
         sys.exit(1)
 
-    # Simplification of cycle column renaming
+    # Simplify cycle column renaming
     if '周期' in df_raw.columns and 'cycle' not in df_raw.columns:
         df_raw.rename(columns={'周期': 'cycle'}, inplace=True)
         print("INFO: Renamed '周期' to 'cycle'.")
@@ -227,8 +225,9 @@ def run_inference():
         print(f"FATAL ERROR: Raw data is missing required feature columns: {missing_raw_features}. Available: {df_raw.columns.tolist()}")
         sys.exit(1)
 
+    # **CHANGED**: Uses the non-aggregating transformation
     df_vae_input = transform_raw_data_to_model_input(df_raw, FEATURE_NAMES)
-    print(f"INFO: Feature transformation complete. Generated {len(df_vae_input)} cell/condition entries.")
+    print(f"INFO: Feature transformation complete. Generated {len(df_vae_input)} entries (No aggregation).")
     
     X_new = df_vae_input[MODEL_INPUT_FEATURES].values
     
@@ -257,7 +256,7 @@ def run_inference():
     print(f"DEBUG: VAE latent mu (z_mu_new) min/max AFTER Z-scaling: {z_mu_new_scaled.min().item():.4f} / {z_mu_new_scaled.max().item():.4f}")
     
     with torch.no_grad():
-        predicted_prob_tensor = regressor(z_mu_new_scaled) # Here we use the scaled z_mu
+        predicted_prob_tensor = regressor(z_mu_new_scaled) 
     
     # 5. Result Integration
     predicted_prob_np = predicted_prob_tensor.cpu().numpy().flatten()
@@ -266,11 +265,10 @@ def run_inference():
     df_results = df_vae_input.copy()
     df_results['predicted_prob'] = predicted_prob_np
     
-    # --- MODIFIED AXIS MAPPING LOGIC ---
-    # z_mu_new_np[:, 0] 是原 z0， z_mu_new_np[:, 1] 是原 z1
-    # 新 z0 = -原 z1 (作为衰老轴)
+    # --- AXIS MAPPING LOGIC ---
+    # z0 = -z1 (Aging Axis)
     df_results['z0'] = -z_mu_new_np[:, 1] 
-    # 新 z1 = 原 z0 
+    # z1 = z0 
     df_results['z1'] = z_mu_new_np[:, 0] 
 
     # 6. Validation and Plotting
@@ -279,7 +277,7 @@ def run_inference():
 
 
 # =================================================================
-# 6. Visualization and Validation Function (MODIFIED LABELS)
+# 6. Visualization and Validation Function
 # =================================================================
 
 def plot_and_validate(df_results: pd.DataFrame):
@@ -290,6 +288,8 @@ def plot_and_validate(df_results: pd.DataFrame):
     print("\n--- 5. Results Validation ---")
     print("Mean Predicted Senescence Score:")
     print(mean_scores.to_string()) 
+    print(f"Total Data Points: {len(df_results)}")
+    print(f"Points per Condition:\n{df_results['Condition'].value_counts().to_string()}")
     
     validation_success = False
     available_conditions = df_results['Condition'].unique().tolist()
@@ -306,64 +306,46 @@ def plot_and_validate(df_results: pd.DataFrame):
     except Exception:
         print("\nWARNING: An error occurred during validation check.")
     
-    # 准备绘图数据
+    # Plot Setup
     plot_order = [cond for cond in ['Normoxia', 'Hypoxia'] if cond in available_conditions]
     if not plot_order:
-         print("\nFATAL ERROR: No valid conditions (Hypoxia/Normoxia) found for plotting.")
+         print("\nFATAL ERROR: No valid conditions found.")
          plt.close()
          return
 
     palette_map = {'Normoxia': 'r', 'Hypoxia': 'b'}
-    # 定义形状映射
     marker_map = {'Normoxia': 'o', 'Hypoxia': 'X'} 
 
     # --- Plot 1: Boxplot ---
     plt.figure(figsize=(6, 5))
     sns.boxplot(
-        x='Condition', 
-        y='predicted_prob', 
-        data=df_results, 
-        order=plot_order, 
-        palette={k: palette_map[k] for k in plot_order}
+        x='Condition', y='predicted_prob', data=df_results, 
+        order=plot_order, palette={k: palette_map[k] for k in plot_order}
     )
     plt.title('Predicted Senescence Probability by Oxygen Condition (Boxplot)')
-    plt.xlabel('Condition')
-    plt.ylabel('Senescence Probability')
+    plt.xlabel('Condition'); plt.ylabel('Senescence Probability')
     plt.ylim(-0.05, 1.05)
     
     for i, condition in enumerate(plot_order):
         score = mean_scores.get(condition, np.nan)
         if not np.isnan(score):
-            text_y_pos = 1.03 # 调整位置，保持与训练图统一
-            plt.text(i, text_y_pos, f'Mean: {score:.3f}', # 保留 3 位小数
-                     horizontalalignment='center', color='black', fontsize=10)
+            plt.text(i, 1.03, f'Mean: {score:.3f}', horizontalalignment='center', color='black', fontsize=10)
 
-    # 保存为 PDF
-    output_plot_name = 'validation_1_boxplot.pdf'.strip()
-    plt.savefig(output_plot_name, format='pdf', bbox_inches='tight')
-    print(f"INFO: Visualization saved: {output_plot_name}")
+    plt.savefig('validation_1_boxplot.pdf', format='pdf', bbox_inches='tight')
+    print("INFO: Saved validation_1_boxplot.pdf")
     plt.close()
 
     # --- Plot 2: Violin Plot ---
     plt.figure(figsize=(6, 5))
     sns.violinplot(
-        x='Condition',
-        y='predicted_prob',
-        data=df_results,
-        order=plot_order,
-        bw_adjust=BW_ADJUST_FACTOR,       
-        palette={k: palette_map[k] for k in plot_order},
-        inner='box' 
+        x='Condition', y='predicted_prob', data=df_results, 
+        order=plot_order, bw_adjust=BW_ADJUST_FACTOR, palette={k: palette_map[k] for k in plot_order}, inner='box'
     )
     plt.title('Predicted Senescence Probability by Oxygen Condition (Violin Plot)')
-    plt.xlabel('Condition')
-    plt.ylabel('Senescence Probability')
+    plt.xlabel('Condition'); plt.ylabel('Senescence Probability')
     plt.ylim(-0.05, 1.05)
-    
-    # 保存为 PDF
-    output_plot_name = 'validation_2_violinplot.pdf'.strip()
-    plt.savefig(output_plot_name, format='pdf', bbox_inches='tight')
-    print(f"INFO: Visualization saved: {output_plot_name}")
+    plt.savefig('validation_2_violinplot.pdf', format='pdf', bbox_inches='tight')
+    print("INFO: Saved validation_2_violinplot.pdf")
     plt.close()
 
     # --- Plot 3: Density Plot ---
@@ -371,40 +353,27 @@ def plot_and_validate(df_results: pd.DataFrame):
     for cond in plot_order:
         subset = df_results[df_results['Condition'] == cond]
         if len(subset) > 1:
-            sns.kdeplot(subset['predicted_prob'], label=cond, color=palette_map[cond], bw_adjust=BW_ADJUST_FACTOR 
-                        ,fill=True, alpha=0.4)
+            sns.kdeplot(subset['predicted_prob'], label=cond, color=palette_map[cond], bw_adjust=BW_ADJUST_FACTOR, fill=True, alpha=0.4)
     
     plt.title('Predicted Senescence Probability Density')
-    plt.xlabel('Senescence Probability')
-    plt.ylabel('Density')
-    plt.xlim(-0.05, 1.05)
-    plt.legend(title='Condition')
-    
-    # 保存为 PDF
-    output_plot_name = 'validation_3_densityplot.pdf'.strip()
-    plt.savefig(output_plot_name, format='pdf', bbox_inches='tight')
-    print(f"INFO: Visualization saved: {output_plot_name}")
+    plt.xlabel('Senescence Probability'); plt.ylabel('Density')
+    plt.xlim(-0.05, 1.05); plt.legend(title='Condition')
+    plt.savefig('validation_3_densityplot.pdf', format='pdf', bbox_inches='tight')
+    print("INFO: Saved validation_3_densityplot.pdf")
     plt.close()
 
-    # --- Plot 4: Latent Space Projection (MODIFIED AXES) ---
+    # --- Plot 4: Latent Space Projection ---
     fig, ax = plt.subplots(figsize=(8, 6)) 
-    
     scatter_plot_mappable = None
     
     for cond in plot_order:
         subset = df_results[df_results['Condition'] == cond]
+        # Scatter with NO aggregation (all points shown)
         current_scatter = ax.scatter(
-            x=subset['z0'], # <-- 使用新的 'z0' (原-z1)
-            y=subset['z1'],
-            c=subset['predicted_prob'],
-            cmap='coolwarm',
-            marker=marker_map[cond], 
-            s=100,
-            alpha=0.8,
-            edgecolors='k',
-            linewidth=0.5,
-            label=cond,
-            vmin=0, vmax=1 
+            x=subset['z0'], y=subset['z1'], c=subset['predicted_prob'],
+            cmap='coolwarm', marker=marker_map[cond], 
+            s=60, alpha=0.7, edgecolors='k', linewidth=0.3,
+            label=cond, vmin=0, vmax=1 
         )
         if scatter_plot_mappable is None:
             scatter_plot_mappable = current_scatter
@@ -413,16 +382,14 @@ def plot_and_validate(df_results: pd.DataFrame):
         cbar = fig.colorbar(scatter_plot_mappable, ax=ax)
         cbar.set_label("Predicted Senescence Probability", rotation=270, labelpad=15)
     
-    ax.set_title('New Data in VAE Latent Space(Shape=Condition, Color=Prediction)', fontsize=14)
-    ax.set_xlabel('Latent Dimension 1 (z0) [Aging Axis]') # <-- 移除 z0_aligned
+    ax.set_title('New Data in VAE Latent Space\n(Shape=Condition, Color=Prediction)', fontsize=14)
+    ax.set_xlabel('Latent Dimension 1 (z0) [Aging Axis]')
     ax.set_ylabel('Latent Dimension 2 (z1)')
     ax.grid(True, linestyle='--', alpha=0.5)
     ax.legend(title='Condition')
     
-    # 保存为 PDF
-    output_plot_name = 'validation_4_latent_space.pdf'.strip()
-    fig.savefig(output_plot_name, format='pdf', bbox_inches='tight') 
-    print(f"INFO: Visualization saved: {output_plot_name}")
+    fig.savefig('validation_4_latent_space.pdf', format='pdf', bbox_inches='tight') 
+    print("INFO: Saved validation_4_latent_space.pdf")
     plt.close(fig) 
 
 # =================================================================
