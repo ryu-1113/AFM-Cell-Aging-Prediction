@@ -125,8 +125,8 @@ def run_pca_comparison():
     axes[1].set_ylabel('Predicted Senescence Probability')
 
     plt.tight_layout()
-    plt.savefig('VAE_vs_PCA_Comparison.png', dpi=300)
-    print("[5/5] 对比图表已保存至 VAE_vs_PCA_Comparison.png")
+    plt.savefig('VAE_vs_PCA_Comparison.pdf', dpi=300)
+    print("[5/5] 对比图表已保存至 VAE_vs_PCA_Comparison.pdf")
 
     # 7. 统计输出
     p_vae = ttest_ind(df_input[df_input['Condition']=='Normoxia']['Prob_VAE'],
