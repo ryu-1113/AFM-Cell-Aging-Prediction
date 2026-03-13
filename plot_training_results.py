@@ -21,7 +21,8 @@ VAE_MODEL_PATH = 'best_vae_model.pth'
 REGRESSOR_MODEL_PATH = 'best_regressor_model.pth'
 SCALER_PATH = 'scaler.pkl'
 RANDOM_SEED = 42
-
+OUTPUT_DIR = 'result' 
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 # 检查GPU可用性
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(f"Using device: {device}")
@@ -154,7 +155,7 @@ def plot_correlation_heatmap_pdf(df_latent: pd.DataFrame, df_raw: pd.DataFrame, 
     plt.title('Correlation: Latent Dims vs Features (Mean/Median)')
     plt.tight_layout()
     output_file = 'training_plot_1_correlation_heatmap.pdf'
-    plt.savefig(output_file, format='pdf', bbox_inches='tight')
+    plt.savefig(os.path.join(OUTPUT_DIR, output_file), format='pdf', bbox_inches='tight')
     print(f"Saved: {output_file}")
     plt.close()
 
@@ -172,7 +173,7 @@ def plot_latent_space_cycle_pdf(df_latent: pd.DataFrame, z0_col: str = 'z0'):
     plt.grid(True, linestyle='--', alpha=0.5)
     plt.legend(title='Cell Cycle')
     output_file = 'training_plot_2_latent_space_cycle.pdf'
-    plt.savefig(output_file, format='pdf', bbox_inches='tight')
+    plt.savefig(os.path.join(OUTPUT_DIR, output_file), format='pdf', bbox_inches='tight')
     print(f"Saved: {output_file}")
     plt.close()
 
@@ -189,7 +190,7 @@ def plot_latent_space_probability_pdf(df_latent: pd.DataFrame, z0_col: str = 'z0
     plt.ylabel('Latent Dimension 2 (z1)', fontsize=12)
     plt.grid(True, linestyle='--', alpha=0.5)
     output_file = 'training_plot_3_latent_space_probability.pdf'
-    plt.savefig(output_file, format='pdf', bbox_inches='tight')
+    plt.savefig(os.path.join(OUTPUT_DIR, output_file), format='pdf', bbox_inches='tight')
     print(f"Saved: {output_file}")
     plt.close()
 
@@ -234,7 +235,7 @@ def plot_prediction_boxplot_pdf(df_results: pd.DataFrame):
     plt.xlabel('Cycle')
     
     output_file = 'training_plot_4_prediction_boxplot.pdf'
-    plt.savefig(output_file, format='pdf', bbox_inches='tight')
+    plt.savefig(os.path.join(OUTPUT_DIR, output_file), format='pdf', bbox_inches='tight')
     print(f"Saved: {output_file}")
     plt.close()
 
@@ -253,7 +254,7 @@ def plot_prediction_kde_pdf(df_results: pd.DataFrame):
     plt.ylabel('Density')
     plt.legend(title='Cell Cycle')
     output_file = 'training_plot_5_prediction_kde.pdf'
-    plt.savefig(output_file, format='pdf')
+    plt.savefig(os.path.join(OUTPUT_DIR, output_file), format='pdf')
     print(f"Saved: {output_file}")
     plt.close()
 

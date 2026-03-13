@@ -23,13 +23,14 @@ except ImportError:
 # =================================================================
 # 1. 路径配置
 # =================================================================
-RAW_DATA_PATH = 'new_p6_data.csv' 
+RAW_DATA_PATH = os.path.join('data','new_p6_data.csv' )
 TRAIN_DATA_PATH = os.path.join('data', 'agg.csv')
 META_FILE_PATH = 'inference_meta.json'
 VAE_MODEL_PATH = 'best_vae_model.pth'
 REGRESSOR_MODEL_PATH = 'best_regressor_model.pth'
 SCALER_PATH = 'scaler.pkl'
-
+OUTPUT_DIR = 'result' 
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 def run_pca_comparison():
@@ -125,7 +126,7 @@ def run_pca_comparison():
     axes[1].set_ylabel('Predicted Senescence Probability')
 
     plt.tight_layout()
-    plt.savefig('VAE_vs_PCA_Comparison.pdf', dpi=300)
+    plt.savefig(os.path.join(OUTPUT_DIR, 'VAE_vs_PCA_Comparison.pdf'), format='pdf')
     print("[5/5] 对比图表已保存至 VAE_vs_PCA_Comparison.pdf")
 
     # 7. 统计输出

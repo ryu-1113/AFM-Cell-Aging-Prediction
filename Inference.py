@@ -52,7 +52,7 @@ def evaluate():
         print(f"加载元数据失败: {e}")
         return
 
-    # 3. 数据准备 (严格复现 upgrade.py 逻辑)
+    # 3. 数据准备 
     df = pd.read_csv(CONFIG["DATA_PATH"])
     soft_label_map = {'P4': 0.1, 'P6': 0.2, 'P8': 0.5, 'P10': 0.9}
     y_true = df['cycle'].map(soft_label_map).values

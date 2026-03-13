@@ -15,11 +15,14 @@ from typing import Tuple, List, Dict
 # 1. Configuration and Constants
 # =================================================================
 
-RAW_DATA_PATH = 'new_p6_data.csv' 
+RAW_DATA_PATH = os.path.join('data','new_p6_data.csv' ) 
 META_FILE_PATH = 'inference_meta.json'
 VAE_MODEL_PATH = 'best_vae_model.pth'
 REGRESSOR_MODEL_PATH = 'best_regressor_model.pth'
 SCALER_PATH = 'scaler.pkl' 
+
+OUTPUT_DIR = 'result' 
+os.makedirs(OUTPUT_DIR, exist_ok=True) 
 
 # 6 Raw feature names (MUST match column headers in the raw data)
 FEATURE_NAMES = [
@@ -331,7 +334,7 @@ def plot_and_validate(df_results: pd.DataFrame):
         if not np.isnan(score):
             plt.text(i, 1.03, f'Mean: {score:.3f}', horizontalalignment='center', color='black', fontsize=10)
 
-    plt.savefig('validation_1_boxplot.pdf', format='pdf', bbox_inches='tight')
+    plt.savefig(os.path.join(OUTPUT_DIR,'validation_1_boxplot.pdf'), format='pdf', bbox_inches='tight')
     print("INFO: Saved validation_1_boxplot.pdf")
     plt.close()
 
@@ -344,7 +347,7 @@ def plot_and_validate(df_results: pd.DataFrame):
     plt.title('Predicted Senescence Probability by Oxygen Condition (Violin Plot)')
     plt.xlabel('Condition'); plt.ylabel('Senescence Probability')
     plt.ylim(-0.05, 1.05)
-    plt.savefig('validation_2_violinplot.pdf', format='pdf', bbox_inches='tight')
+    plt.savefig(os.path.join(OUTPUT_DIR,'validation_2_violinplot.pdf'), format='pdf', bbox_inches='tight')
     print("INFO: Saved validation_2_violinplot.pdf")
     plt.close()
 
@@ -358,7 +361,7 @@ def plot_and_validate(df_results: pd.DataFrame):
     plt.title('Predicted Senescence Probability Density')
     plt.xlabel('Senescence Probability'); plt.ylabel('Density')
     plt.xlim(-0.05, 1.05); plt.legend(title='Condition')
-    plt.savefig('validation_3_densityplot.pdf', format='pdf', bbox_inches='tight')
+    plt.savefig(os.path.join(OUTPUT_DIR,'validation_3_densityplot.pdf'), format='pdf', bbox_inches='tight')
     print("INFO: Saved validation_3_densityplot.pdf")
     plt.close()
 
@@ -388,7 +391,7 @@ def plot_and_validate(df_results: pd.DataFrame):
     ax.grid(True, linestyle='--', alpha=0.5)
     ax.legend(title='Condition')
     
-    fig.savefig('validation_4_latent_space.pdf', format='pdf', bbox_inches='tight') 
+    fig.savefig(os.path.join(OUTPUT_DIR,'validation_4_latent_space.pdf'), format='pdf', bbox_inches='tight') 
     print("INFO: Saved validation_4_latent_space.pdf")
     plt.close(fig) 
 

@@ -11,7 +11,8 @@ import os
 # ==========================================
 DATA_PATH = 'data/agg.csv'  # 已构造好 18 维特征的文件
 SCALER_PATH = 'scaler.pkl'   # 训练时用的 scaler
-
+OUTPUT_DIR = 'result' 
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 # 明确 18 个特征的名称
 BASE_FEATURES = ['adhesion', 'elastic_modulus', 'height', 'roughness', 'length', 'wideth']
 STATS = ['mean', 'median', 'std']
@@ -77,6 +78,6 @@ plt.grid(True, linestyle='--', alpha=0.5)
 
 # 保存为 PDF
 plt.tight_layout()
-plt.savefig('original_data_pca_analysis.pdf', format='pdf')
+plt.savefig(os.path.join(OUTPUT_DIR, 'original_data_pca_analysis.pdf'), format='pdf')
 print("PCA 绘图已完成并保存为 'original_data_pca_analysis.pdf'")
 plt.show()
