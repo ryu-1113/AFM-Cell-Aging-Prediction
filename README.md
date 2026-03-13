@@ -23,24 +23,29 @@ Traditional linear methods often fail to distinguish cellular aging stages due t
 ├── inference_meta.json        # Model hyperparameters and metadata
 ├── scaler.pkl                 # Fitted StandardScaler for feature normalization
 └── requirements.txt           # Python dependency list
+```
 
 ## 🚀 Getting Started
 
 ### 1. Environment Setup
+
 Install the necessary dependencies using the provided `requirements.txt` file:
 ```bash
 pip install -r requirements.txt
-
+```
 ### 2. Quick Reproducibility
+
 To reproduce the exact results and figures presented in the paper, it is highly recommended to use the pre-trained model weights provided in this repository. You can directly run the evaluation or comparison scripts:
 Downstream Tasks: Run `python evaluation.py` or python `comparison.py` to verify model performance on independent test dataset (e.g., Hypoxia stress).
 
 Visualization: Run `python plot_training_results.py` to generate the latent space maps and heatmaps using the existing model.
 
 ### 3. Training from Scratch
+
 If you wish to retrain the model, run:
+
 ```bash
 python upgrade.py
-
+```
 Note: While a fixed seed (RANDOM_SEED = 42) is used, slight variations in the latent space orientation may occur due to the stochastic nature of VAE initialization and hardware-level non-determinism. For consistent visualization, the provided weights are preferred.
 
