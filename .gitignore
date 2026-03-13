@@ -1,1 +1,6 @@
 old version/
+__pycache__/
+Solution_Path/
+cell_aging_predictions.csv
+data_prepocessing.ipynb
+data_prepocessing.py
