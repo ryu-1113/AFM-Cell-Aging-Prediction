@@ -9,7 +9,7 @@ This repository contains the official implementation for predicting cell aging s
 
 ## 📂 Repository Structure
 ```text
-├── data/                  # Processed AFM datasets (agg.csv, etc.)
+├── data/                  # Processed AFM datasets 
 ├── upgrade.py             # Core training script for VAE & Regressor
 ├── evaluation.py          # Model performance evaluation and plotting
 ├── Inference.py           # Inference script for aging stage prediction

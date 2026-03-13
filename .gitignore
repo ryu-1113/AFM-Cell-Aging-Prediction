@@ -12,6 +12,7 @@
 # 允许上传 .gitignore 本身和 README
 !.gitignore
 !README.md
+!requirements.txt
 
 # 允许上传根目录下的核心 Python 脚本
 !upgrade.py
