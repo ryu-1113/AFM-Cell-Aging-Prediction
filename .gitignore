@@ -21,21 +21,21 @@
 !PCA.py
 !plot_training_results.py
 
-
-# 允许上传特定的数据文件
-!new_p6_data.csv
-
 # 允许上传模型权重文件 (Checkpoints)
 !*.pth
 !*.pkl
 !*.json
+
 # 允许上传模型结果（PDF）
 !result/
+!result/*.pdf
+
 # 特殊处理 data 文件夹：只保留其中的 agg.csv
 !data/
 data/*
 !data/agg.csv
 !data/new_p6_data.csv
+
 # ==========================================
 # 3. 确保这些永远被忽略
 # ==========================================
