@@ -7,14 +7,14 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.decomposition import PCA
 from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import StandardScaler
 from scipy.stats import ttest_ind
 import os
 import sys
 
-# 尝试导入你原有的模块
 try:
     from upgrade import VAE, LatentRegressor
-    from evaluation import transform_raw_data_to_model_input
+    from evaluation import MODEL_INPUT_FEATURES, transform_raw_data_to_model_input
     print("[1/5] 成功加载模型结构定义与预处理函数。")
 except ImportError:
     print("错误: 找不到 upgrade.py 或 evaluation.py，请确保它们在当前目录。")
@@ -62,8 +62,11 @@ def run_pca_comparison():
     # 3. 数据清洗 (调用 evaluation.py 的原生函数)
     FEATURE_NAMES_CLEAN = ['adhesion', 'elastic_modulus', 'height', 'roughness', 'length', 'width']
     df_input = transform_raw_data_to_model_input(df_raw, FEATURE_NAMES_CLEAN)
+
+ 
+    X_new_vae_scaled = scaler.transform(df_input[MODEL_INPUT_FEATURES].values)
     
-    # 清洗完后，将 width_xxx 映射回带错别字的 wideth_xxx
+   
     rename_map = {
         'width_mean': 'wideth_mean',
         'width_median': 'wideth_median',
@@ -71,8 +74,8 @@ def run_pca_comparison():
     }
     df_input.rename(columns=rename_map, inplace=True)
     
-    # 严格按照 exact_features 提取并排序，杜绝一切 KeyError 和 ValueError
-    X_new_scaled = scaler.transform(df_input[exact_features])
+
+    X_new_pca_scaled = scaler.transform(df_input[exact_features])
     print(f"[3/5] 数据预处理完成。成功对齐 {len(exact_features)} 个特征。样本量: {len(df_input)}")
 
     # 4. VAE 预测分支
@@ -84,12 +87,12 @@ def run_pca_comparison():
     regressor.load_state_dict(torch.load(REGRESSOR_MODEL_PATH, map_location=device))
     regressor.eval()
 
-    X_tensor = torch.tensor(X_new_scaled, dtype=torch.float32).to(device)
+    X_tensor = torch.tensor(X_new_vae_scaled, dtype=torch.float32).to(device)
     with torch.no_grad():
         _, mu, _, _ = vae(X_tensor)
         mu_np = mu.cpu().numpy()
         # Z-Score 标准化
-        mu_norm = (mu_np - mu_np.mean(axis=0)) / (mu_np.std(axis=0) + 1e-8)
+        mu_norm = StandardScaler().fit_transform(mu_np)
         probs_vae = regressor(torch.tensor(mu_norm, dtype=torch.float32).to(device)).cpu().numpy().flatten()
 
     # 5. PCA 基准分支
@@ -106,7 +109,7 @@ def run_pca_comparison():
     X_train_pca = pca.fit_transform(X_train_scaled)
     pca_reg = LinearRegression().fit(X_train_pca, y_train)
 
-    X_new_pca = pca.transform(X_new_scaled)
+    X_new_pca = pca.transform(X_new_pca_scaled)
     probs_pca = np.clip(pca_reg.predict(X_new_pca), 0, 1)
 
     # 6. 结果整合与可视化
@@ -116,10 +119,12 @@ def run_pca_comparison():
     sns.set_theme(style="whitegrid")
     fig, axes = plt.subplots(1, 2, figsize=(14, 6))
     order = ['Normoxia', 'Hypoxia']
+    condition_palette = {'Normoxia': 'red', 'Hypoxia': 'blue'}
     
-    sns.boxplot(ax=axes[0], x='Condition', y='Prob_VAE', data=df_input, order=order, palette='coolwarm')
+    sns.boxplot(ax=axes[0], x='Condition', y='Prob_VAE', data=df_input, order=order, palette=condition_palette)
     axes[0].set_title('VAE Model (Non-linear Latent Space)')
     axes[0].set_ylabel('Predicted Senescence Probability')
+    axes[0].set_ylim(-0.05, 1.05)
 
     sns.boxplot(ax=axes[1], x='Condition', y='Prob_PCA', data=df_input, order=order, palette='Greys')
     axes[1].set_title('PCA Baseline (Linear Projection)')
@@ -127,6 +132,7 @@ def run_pca_comparison():
 
     plt.tight_layout()
     plt.savefig(os.path.join(OUTPUT_DIR, 'VAE_vs_PCA_Comparison.pdf'), format='pdf')
+    plt.close(fig)
     print("[5/5] 对比图表已保存至 VAE_vs_PCA_Comparison.pdf")
 
     # 7. 统计输出
